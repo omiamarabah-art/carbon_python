@@ -1,0 +1,189 @@
+# ======================================================
+# 1. Import Required Libraries
+# ======================================================
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+plt.style.use("seaborn-v0_8")
+sns.set_palette("viridis")
+
+# ======================================================
+# 2. Load and Inspect the Dataset
+# ======================================================
+df = pd.read_csv("/content/carbon_emission_dataset_with_Industry.csv")
+
+print("First 5 rows of the dataset:")
+print(df.head())
+
+print("\nDataset Information:")
+df.info()
+
+print("\nStatistical Description:")
+print(df.describe())
+
+# ======================================================
+# 3. Data Cleaning
+# ======================================================
+# Detect date column automatically
+date_column = None
+for col in df.columns:
+    converted = pd.to_datetime(df[col], errors="coerce")
+    if converted.notna().sum() > len(df) * 0.5:
+        df[col] = converted
+        date_column = col
+        break
+
+if date_column is None:
+    raise ValueError("No valid date column detected!")
+
+print("Detected Date Column:", date_column)
+
+# Sort data by date
+df = df.sort_values(by=date_column)
+
+# Fill missing values (numeric only)
+for col in df.select_dtypes(include=np.number):
+    df[col].fillna(df[col].median(), inplace=True)
+
+# ======================================================
+# 4. Exploratory Data Analysis
+# ======================================================
+energy_columns = [
+    "Total_Energy_Consumption_kWh",
+    "Renewable_Energy_Consumption_kWh",
+    "NonRenewable_Energy_Consumption_kWh",
+    "Production_Output_Units",
+    "Supply_Chain_Transport_km"
+]
+
+# Basic statistics
+basic_stats = df[energy_columns].agg(["mean", "median", "min", "max"])
+print(basic_stats)
+
+# ======================================================
+# 5. Visualizations
+# ======================================================
+# Distribution plots
+for col in energy_columns:
+    plt.figure(figsize=(6, 4))
+    sns.histplot(df[col], kde=True)
+    plt.title("Distribution of " + col)
+    plt.xlabel(col)
+    plt.ylabel("Frequency")
+    plt.show()
+
+# Bar chart for industry sectors
+plt.figure(figsize=(8, 5))
+df["Industry_Sectors"].value_counts().plot(kind="bar")
+plt.title("Frequency of Industry Sectors")
+plt.xlabel("Industry Sector")
+plt.ylabel("Count")
+plt.show()
+
+# Energy consumption over time
+plt.figure(figsize=(10, 5))
+plt.plot(df[date_column], df["Total_Energy_Consumption_kWh"], label="Total")
+plt.plot(df[date_column], df["Renewable_Energy_Consumption_kWh"], label="Renewable")
+plt.plot(df[date_column], df["NonRenewable_Energy_Consumption_kWh"], label="Non-Renewable")
+plt.legend()
+plt.title("Energy Consumption Over Time")
+plt.xlabel("Date")
+plt.ylabel("Energy (kWh)")
+plt.show()
+
+# Scatter: Emissions vs Non-renewable energy
+plt.figure(figsize=(6, 4))
+sns.scatterplot(
+    x=df["NonRenewable_Energy_Consumption_kWh"],
+    y=df["Carbon_Emission_tCO2e_TARGET"]
+)
+plt.title("Carbon Emissions vs Non-Renewable Energy")
+plt.xlabel("Non-Renewable Energy")
+plt.ylabel("Carbon Emissions")
+plt.show()
+
+# Scatter: Emissions over time
+plt.figure(figsize=(6, 4))
+sns.scatterplot(
+    x=df[date_column],
+    y=df["Carbon_Emission_tCO2e_TARGET"]
+)
+plt.title("Carbon Emissions Over Time")
+plt.xlabel("Date")
+plt.ylabel("Carbon Emissions")
+plt.show()
+
+# ======================================================
+# 6. Correlation & Multivariate Analysis
+# ======================================================
+plt.figure(figsize=(10, 6))
+correlation_matrix = df.corr(numeric_only=True)
+sns.heatmap(correlation_matrix, cmap="coolwarm")
+plt.title("Correlation Heatmap")
+plt.show()
+
+# Boxplot by industry
+plt.figure(figsize=(10, 5))
+sns.boxplot(
+    x="Industry_Sectors",
+    y="Carbon_Emission_tCO2e_TARGET",
+    data=df
+)
+plt.xticks(rotation=45)
+plt.title("Carbon Emissions by Industry")
+plt.show()
+
+# Pairplot (بدون sample عشان ما نضيف تعقيد)
+sns.pairplot(df[[
+    "Carbon_Emission_tCO2e_TARGET",
+    "Total_Energy_Consumption_kWh",
+    "NonRenewable_Energy_Consumption_kWh",
+    "Production_Output_Units"
+]])
+plt.show()
+
+# ======================================================
+# 7. Time Series Analysis
+# ======================================================
+plt.figure(figsize=(10, 5))
+plt.plot(df[date_column], df["Carbon_Emission_tCO2e_TARGET"])
+plt.title("Carbon Emissions Over Time")
+plt.xlabel("Date")
+plt.ylabel("Carbon Emissions")
+plt.show()
+
+# Rolling statistics
+df["Rolling_Mean"] = df["Carbon_Emission_tCO2e_TARGET"].rolling(7).mean()
+df["Rolling_Var"] = df["Carbon_Emission_tCO2e_TARGET"].rolling(7).var()
+
+plt.figure(figsize=(10, 5))
+plt.plot(df[date_column], df["Carbon_Emission_tCO2e_TARGET"], label="Original", alpha=0.5)
+plt.plot(df[date_column], df["Rolling_Mean"], label="Rolling Mean")
+plt.legend()
+plt.title("Rolling Mean of Carbon Emissions")
+plt.show()
+
+# ======================================================
+# 8. Analytical Answers
+# ======================================================
+# Q1: Highest variability
+variability = df[energy_columns].std()
+print("Q1:", variability.idxmax())
+
+# Q2: Skewness
+skewness = df["Carbon_Emission_tCO2e_TARGET"].skew()
+print("Q2:", skewness)
+
+# Q3: Strongest correlation
+target_corr = correlation_matrix["Carbon_Emission_tCO2e_TARGET"].abs().sort_values(ascending=False)
+print("Q3:", target_corr.index[1])
+
+# Q4: Monthly trend
+monthly_avg = df.groupby(df[date_column].dt.month)["Carbon_Emission_tCO2e_TARGET"].mean()
+print("Q4:\n", monthly_avg)
+
+# Q5: Seasonality
+seasonality_std = df.groupby(df[date_column].dt.month)["Carbon_Emission_tCO2e_TARGET"].std()
+print("Q5:\n", seasonality_std)
